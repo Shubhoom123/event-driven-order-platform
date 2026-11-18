@@ -44,6 +44,11 @@ public class OutboxRelay {
         }
     }
 
+    @Scheduled(fixedDelay = 3_600_000)
+    public void prune() {
+        jdbc.sql("DELETE FROM outbox WHERE published_at < now() - interval '7 days'").update();
+    }
+
     // At-least-once: a crash after send but before the UPDATE republishes the row.
     private int publishBatch() {
         List<Row> rows = jdbc.sql("""
