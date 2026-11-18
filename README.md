@@ -2,7 +2,7 @@
 
 Order and Inventory services (Payment and Notification come in later phases) coordinating through Kafka with a transactional outbox. Java 21, Spring Boot 4.1, Kafka (KRaft), PostgreSQL.
 
-Status: Phases 1 and 2 verified (order flow end to end, broker-outage test). Phase 3 (inbox, idempotent inventory consumer) written, not yet run. Design: [docs/](docs/00-requirements.md), [roadmap](docs/ROADMAP.md).
+Status: Phases 1-2 and the inventory half of Phase 3 verified (all tests green). Payment service (one charge per order) written, not yet run. Design: [docs/](docs/00-requirements.md), [roadmap](docs/ROADMAP.md).
 
 ## Run (Java 21, Maven, Docker)
 
@@ -19,4 +19,4 @@ docker compose exec postgres psql -U postgres -d orders -c "select id, type, pub
 
 Expect `201`; the same call again returns `200` with the same `orderId`; inventory logs the `ReserveInventory` message; both outbox rows have `published_at` set.
 
-`mvn verify` also runs `OutboxTest` (order-service) and `InventoryIdempotencyTest` (inventory-service) with Testcontainers: Docker must be running; allow a minute or two.
+`mvn verify` also runs `OutboxTest` (order-service) and `InventoryIdempotencyTest` (inventory-service), `PaymentIdempotencyTest` (payment-service) with Testcontainers: Docker must be running; allow a minute or two.
