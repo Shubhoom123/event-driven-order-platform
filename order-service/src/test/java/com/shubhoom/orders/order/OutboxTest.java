@@ -45,6 +45,8 @@ class OutboxTest {
         r.add("spring.datasource.password", postgres::getPassword);
         r.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         r.add("spring.kafka.producer.properties.max.block.ms", () -> "5000");
+        r.add("spring.kafka.listener.auto-startup", () -> "false");
+        r.add("saga.sweeper.enabled", () -> "false");
     }
 
     @Autowired OrderService orders;

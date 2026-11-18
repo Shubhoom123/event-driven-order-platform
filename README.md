@@ -2,7 +2,7 @@
 
 Order and Inventory services (Payment and Notification come in later phases) coordinating through Kafka with a transactional outbox. Java 21, Spring Boot 4.1, Kafka (KRaft), PostgreSQL.
 
-Status: Phases 1-3 verified (outbox, broker-outage test, idempotent inventory and payment consumers; 9 tests green). Next: Phase 4, orchestrated saga. Design: [docs/](docs/00-requirements.md), [roadmap](docs/ROADMAP.md).
+Status: Phases 1-3 verified (outbox, broker-outage test, idempotent inventory and payment consumers; 9 tests green). Phase 4 (orchestrated saga: compensation, timeout recovery) written, not yet run. Design: [docs/](docs/00-requirements.md), [roadmap](docs/ROADMAP.md).
 
 ## Run (Java 21, Maven, Docker)
 

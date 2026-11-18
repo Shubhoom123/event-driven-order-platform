@@ -90,6 +90,21 @@ class InventoryIdempotencyTest {
         assertEquals(0, stock("rel", "reserved"));
     }
 
+    @Test
+    void commitMovesReservedToSoldOnce() {
+        seed("com", 10);
+        String orderId = id();
+        inventory.reserve(id(), orderId, List.of(new Item("com", 4)));
+
+        inventory.commit(id(), orderId);
+        inventory.commit(id(), orderId);
+        inventory.release(id(), orderId);
+
+        assertEquals(6, stock("com", "available"));
+        assertEquals(0, stock("com", "reserved"));
+        assertEquals(4, stock("com", "sold"));
+    }
+
     private static String id() {
         return UUID.randomUUID().toString();
     }

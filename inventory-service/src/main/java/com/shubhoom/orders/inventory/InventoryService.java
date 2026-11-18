@@ -92,6 +92,25 @@ public class InventoryService {
         emit(orderId, "InventoryReleased");
     }
 
+    // Order confirmed: reserved stock becomes sold. Only a RESERVED reservation can be committed, so repeats do nothing.
+    @Transactional
+    public void commit(String eventId, String orderId) {
+        if (!inbox.firstTime(CONSUMER, eventId)) {
+            return;
+        }
+        jdbc.sql("UPDATE reservations SET status = 'COMMITTED' WHERE order_id = :id AND status = 'RESERVED' "
+                        + "RETURNING items::text")
+                .param("id", UUID.fromString(orderId))
+                .query(String.class)
+                .optional()
+                .ifPresent(json -> {
+                    for (Item item : EventSerde.fromJson(json, Item[].class)) {
+                        jdbc.sql("UPDATE stock SET reserved = reserved - :q, sold = sold + :q WHERE sku = :sku")
+                                .param("q", item.quantity()).param("sku", item.sku()).update();
+                    }
+                });
+    }
+
     private int take(Item item) {
         return jdbc.sql("UPDATE stock SET available = available - :q, reserved = reserved + :q "
                         + "WHERE sku = :sku AND available >= :q")

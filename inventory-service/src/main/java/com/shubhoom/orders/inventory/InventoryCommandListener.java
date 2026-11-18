@@ -31,6 +31,14 @@ class InventoryCommandListener {
         }
     }
 
+    @KafkaListener(topics = Topics.ORDER_EVENTS, groupId = "inventory-order.events")
+    void onOrderEvent(String value) {
+        EventEnvelope e = EventSerde.fromJson(value, EventEnvelope.class);
+        if (e.type().equals("OrderConfirmed")) {
+            service.commit(e.eventId(), e.aggregateId());
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static List<InventoryService.Item> items(EventEnvelope e) {
         return ((List<Map<String, Object>>) e.payload().get("items")).stream()
