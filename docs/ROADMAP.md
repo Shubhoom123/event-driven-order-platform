@@ -5,7 +5,7 @@ Each phase ends with a runnable check. Because the assistant cannot compile or r
 | Phase | Deliverable | Done when (you run it) | Est. |
 |---|---|---|---|
 | 0 | Requirements, capacity, ADRs, architecture (this folder) | You can explain each decision and its runner-up | 2-3 d |
-| 1 | Walking skeleton: Maven multi-module, `common`, 4 services, Compose (Kafka + Postgres), CI workflow file | `docker compose up`, then one curl yields an event consumed end to end; `mvn verify` green | 3-4 d |
+| 1 | Walking skeleton: Maven multi-module, `common`, order and inventory services (payment and notification added in their phases), Compose (Kafka + Postgres) | `docker compose up`, then one curl yields an event consumed end to end; `mvn verify` green | 3-4 d |
 | 2 | Transactional outbox + relay | Testcontainers test stops Kafka mid-run; all events still arrive after restart | 3-4 d |
 | 3 | Inbox + idempotent consumers | Same event delivered 5x causes one stock change and one charge | 2-3 d |
 | 4 | Orchestrated saga + compensation + timeout recovery | Forced payment failure restores stock; stuck saga recovers; compensation failure reaches `COMPENSATION_FAILED` | 4-5 d |

@@ -24,18 +24,14 @@ class OrderController {
 
     @PostMapping
     ResponseEntity<OrderView> create(
-            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(name = "Idempotency-Key", required = false) String key,
             @Valid @RequestBody CreateOrderRequest request) {
-        OrderService.Result result = service.create(request, idempotencyKey);
-        return ResponseEntity
-                .status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
-                .body(result.order());
+        OrderService.Result r = service.create(request, key);
+        return ResponseEntity.status(r.created() ? HttpStatus.CREATED : HttpStatus.OK).body(r.order());
     }
 
     @GetMapping("/{id}")
     ResponseEntity<OrderView> get(@PathVariable UUID id) {
-        return service.find(id)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return service.find(id).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

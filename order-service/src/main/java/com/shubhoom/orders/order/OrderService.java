@@ -16,9 +16,8 @@ public class OrderService {
 
     public record Result(OrderView order, boolean created) {}
 
-    private static final String SELECT_ORDER = """
-            SELECT id, status, customer_id, amount_cents, currency, created_at FROM orders
-            """;
+    private static final String SELECT =
+            "SELECT id, status, customer_id, amount_cents, currency, created_at FROM orders WHERE ";
 
     private final JdbcClient jdbc;
     private final OutboxWriter outbox;
@@ -28,45 +27,36 @@ public class OrderService {
         this.outbox = outbox;
     }
 
-    /**
-     * One transaction: order row, items, and two outbox rows. Either all commit or none.
-     * Idempotency uses ON CONFLICT DO NOTHING rather than catching a unique-violation,
-     * because a failed statement would poison the whole Postgres transaction.
-     */
     @Transactional
     public Result create(CreateOrderRequest req, String idempotencyKey) {
         UUID id = UUID.randomUUID();
 
+        // ON CONFLICT instead of catching a unique violation: a failed statement aborts the whole Postgres txn.
         int inserted = jdbc.sql("""
                 INSERT INTO orders (id, customer_id, amount_cents, currency, status, idempotency_key)
-                VALUES (:id, :customerId, :amount, :currency, 'PENDING', :key)
+                VALUES (:id, :customer, :amount, :currency, 'PENDING', :key)
                 ON CONFLICT (idempotency_key) DO NOTHING
                 """)
                 .param("id", id)
-                .param("customerId", req.customerId())
+                .param("customer", req.customerId())
                 .param("amount", req.amountCents())
                 .param("currency", req.currency())
                 .param("key", idempotencyKey)
                 .update();
 
         if (inserted == 0) {
-            OrderView existing = findByKey(idempotencyKey)
-                    .orElseThrow(() -> new IllegalStateException("conflict without existing order"));
-            return new Result(existing, false);
+            return new Result(query("idempotency_key = :p", idempotencyKey).orElseThrow(), false);
         }
 
         for (CreateOrderRequest.Item item : req.items()) {
             jdbc.sql("INSERT INTO order_items (order_id, sku, quantity) VALUES (:id, :sku, :qty)")
-                    .param("id", id)
-                    .param("sku", item.sku())
-                    .param("qty", item.quantity())
+                    .param("id", id).param("sku", item.sku()).param("qty", item.quantity())
                     .update();
         }
 
         List<Map<String, Object>> items = req.items().stream()
                 .map(i -> Map.<String, Object>of("sku", i.sku(), "quantity", i.quantity()))
                 .toList();
-
         String orderId = id.toString();
         outbox.append(Topics.INVENTORY_COMMANDS, orderId, "ReserveInventory",
                 Map.of("orderId", orderId, "items", items));
@@ -79,26 +69,16 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public Optional<OrderView> find(UUID id) {
-        return jdbc.sql(SELECT_ORDER + " WHERE id = :id")
-                .param("id", id)
-                .query((rs, i) -> map(rs))
-                .optional();
+        return query("id = :p", id);
     }
 
-    private Optional<OrderView> findByKey(String key) {
-        return jdbc.sql(SELECT_ORDER + " WHERE idempotency_key = :key")
-                .param("key", key)
-                .query((rs, i) -> map(rs))
+    private Optional<OrderView> query(String where, Object param) {
+        return jdbc.sql(SELECT + where)
+                .param("p", param)
+                .query((rs, i) -> new OrderView(
+                        rs.getObject("id", UUID.class), rs.getString("status"), rs.getString("customer_id"),
+                        rs.getLong("amount_cents"), rs.getString("currency"),
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant()))
                 .optional();
-    }
-
-    private static OrderView map(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return new OrderView(
-                rs.getObject("id", UUID.class),
-                rs.getString("status"),
-                rs.getString("customer_id"),
-                rs.getLong("amount_cents"),
-                rs.getString("currency"),
-                rs.getObject("created_at", OffsetDateTime.class).toInstant());
     }
 }

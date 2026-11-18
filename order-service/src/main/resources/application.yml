@@ -2,32 +2,15 @@ server:
   port: 8081
 
 spring:
-  application:
-    name: order-service
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/orders}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: jdbc:postgresql://localhost:5432/orders
+    username: postgres
+    password: postgres
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    bootstrap-servers: localhost:9092
     producer:
       acks: all
-      properties:
-        enable.idempotence: true
-        request.timeout.ms: 10000
-        delivery.timeout.ms: 30000
-    consumer:
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,prometheus,info
 
 outbox:
   relay:
     enabled: true
-    poll-ms: 50
-    batch-size: 100

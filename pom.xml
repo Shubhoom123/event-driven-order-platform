@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <!-- Confirm the latest 4.1.x patch at start.spring.io and bump this. -->
     <version>4.1.0</version>
     <relativePath/>
   </parent>
@@ -25,11 +22,8 @@
     <module>common</module>
     <module>order-service</module>
     <module>inventory-service</module>
-    <module>payment-service</module>
-    <module>notification-service</module>
   </modules>
 
-  <!-- Shared by every module for the skeleton. Split per module later if it gets noisy. -->
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -62,11 +56,6 @@
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
-      <scope>runtime</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.micrometer</groupId>
-      <artifactId>micrometer-registry-prometheus</artifactId>
       <scope>runtime</scope>
     </dependency>
     <dependency>
