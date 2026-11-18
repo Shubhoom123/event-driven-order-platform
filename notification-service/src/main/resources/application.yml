@@ -8,6 +8,8 @@ spring:
     password: postgres
   kafka:
     bootstrap-servers: localhost:9092
+    listener:
+      concurrency: 6
     consumer:
       auto-offset-reset: earliest
 
