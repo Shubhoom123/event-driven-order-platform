@@ -11,6 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -103,6 +104,20 @@ class InventoryIdempotencyTest {
         assertEquals(6, stock("com", "available"));
         assertEquals(0, stock("com", "reserved"));
         assertEquals(4, stock("com", "sold"));
+    }
+
+    @Test
+    void outboxRowsCarryTheCurrentTraceId() {
+        seed("trace", 5);
+        String orderId = id();
+        MDC.put("traceId", "trace-abc");
+        try {
+            inventory.reserve(id(), orderId, List.of(new Item("trace", 1)));
+        } finally {
+            MDC.clear();
+        }
+        assertEquals("trace-abc", jdbc.sql("SELECT headers->>'traceId' FROM outbox WHERE msg_key = :k")
+                .param("k", orderId).query(String.class).single());
     }
 
     private static String id() {

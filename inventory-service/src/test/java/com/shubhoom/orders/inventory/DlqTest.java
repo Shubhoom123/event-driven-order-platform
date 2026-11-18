@@ -6,6 +6,7 @@ import com.shubhoom.orders.common.DlqReplay;
 import com.shubhoom.orders.common.EventEnvelope;
 import com.shubhoom.orders.common.EventSerde;
 import com.shubhoom.orders.common.Topics;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -79,6 +81,22 @@ class DlqTest {
         await(() -> reservations(orderId) == 1, 60);
         assertEquals(true, n >= 1);
         assertEquals(0, replay.replay(Topics.INVENTORY_COMMANDS), "a second replay must find nothing new");
+    }
+
+    // The trace id in a Kafka header must reach the logging context and be written to the outbox of the reply.
+    @Test
+    void traceIdFromKafkaHeaderReachesTheOutbox() throws Exception {
+        seed("traced", 5);
+        String orderId = UUID.randomUUID().toString();
+        ProducerRecord<String, String> record =
+                new ProducerRecord<>(Topics.INVENTORY_COMMANDS, orderId, reserve(orderId, "traced"));
+        record.headers().add("traceId", "trace-from-kafka".getBytes(StandardCharsets.UTF_8));
+        producer.send(record).get(10, TimeUnit.SECONDS);
+
+        await(() -> reservations(orderId) == 1, 60);
+        assertEquals("trace-from-kafka", jdbc.sql(
+                        "SELECT headers->>'traceId' FROM outbox WHERE msg_key = :k AND type = 'InventoryReserved'")
+                .param("k", orderId).query(String.class).single());
     }
 
     private static String reserve(String orderId, String sku) {

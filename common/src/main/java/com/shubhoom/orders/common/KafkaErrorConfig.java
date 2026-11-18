@@ -1,5 +1,6 @@
 package com.shubhoom.orders.common;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -15,11 +16,14 @@ import org.springframework.util.backoff.FixedBackOff;
 class KafkaErrorConfig {
 
     @Bean
-    DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> kafka,
+    DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> kafka, MeterRegistry metrics,
                                           @Value("${kafka.consumer.retry-attempts:3}") long attempts,
                                           @Value("${kafka.consumer.retry-backoff-ms:1000}") long backoffMs) {
         DeadLetterPublishingRecoverer toDlq = new DeadLetterPublishingRecoverer(kafka,
-                (record, ex) -> new TopicPartition(record.topic() + ".dlq", -1));
+                (record, ex) -> {
+                    metrics.counter("kafka.dlq", "topic", record.topic()).increment();
+                    return new TopicPartition(record.topic() + ".dlq", -1);
+                });
         return new DefaultErrorHandler(toDlq, new FixedBackOff(backoffMs, attempts));
     }
 }

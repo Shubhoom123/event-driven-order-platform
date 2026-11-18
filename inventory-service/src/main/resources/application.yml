@@ -1,5 +1,5 @@
 server:
-  port: 8082
+  port: 8092
 
 spring:
   datasource:
@@ -16,3 +16,16 @@ spring:
 outbox:
   relay:
     enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: inventory-service
+
+logging:
+  pattern:
+    level: "%5p [%X{traceId:-}]"

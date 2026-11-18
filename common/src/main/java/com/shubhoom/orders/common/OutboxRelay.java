@@ -1,7 +1,9 @@
 package com.shubhoom.orders.common;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,7 +22,7 @@ public class OutboxRelay {
     private static final Logger log = LoggerFactory.getLogger(OutboxRelay.class);
     private static final int BATCH = 100;
 
-    private record Row(long id, String topic, String key, String value) {}
+    private record Row(long id, String topic, String key, String value, String traceId) {}
 
     private final JdbcClient jdbc;
     private final KafkaTemplate<String, String> kafka;
@@ -52,16 +54,20 @@ public class OutboxRelay {
     // At-least-once: a crash after send but before the UPDATE republishes the row.
     private int publishBatch() {
         List<Row> rows = jdbc.sql("""
-                SELECT id, topic, msg_key, payload::text FROM outbox
+                SELECT id, topic, msg_key, payload::text, headers->>'traceId' FROM outbox
                 WHERE published_at IS NULL ORDER BY id LIMIT :n FOR UPDATE SKIP LOCKED
                 """)
                 .param("n", BATCH)
-                .query((rs, i) -> new Row(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4)))
+                .query((rs, i) -> new Row(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5)))
                 .list();
 
         for (Row r : rows) {
             try {
-                kafka.send(r.topic(), r.key(), r.value()).get(10, TimeUnit.SECONDS);
+                ProducerRecord<String, String> record = new ProducerRecord<>(r.topic(), r.key(), r.value());
+                if (r.traceId() != null) {
+                    record.headers().add(Trace.KEY, r.traceId().getBytes(StandardCharsets.UTF_8));
+                }
+                kafka.send(record).get(10, TimeUnit.SECONDS);
             } catch (Exception e) {
                 throw new IllegalStateException("publish failed for outbox row " + r.id(), e);
             }

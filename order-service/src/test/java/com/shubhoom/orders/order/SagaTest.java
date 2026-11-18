@@ -2,6 +2,7 @@ package com.shubhoom.orders.order;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ class SagaTest {
     @Autowired OrderService orders;
     @Autowired OrderSaga saga;
     @Autowired JdbcClient jdbc;
+    @Autowired MeterRegistry registry;
 
     @Test
     void happyPathConfirmsOrder() {
@@ -45,6 +47,8 @@ class SagaTest {
         saga.on(ev(), "PaymentCharged", id);
         assertEquals("CONFIRMED", status(id));
         assertEquals(1L, sent(id, "OrderConfirmed"));
+        assertEquals(1.0, registry.counter("saga.transition", "to", "CONFIRMED").count());
+        assertEquals(1L, registry.get("saga.duration").tag("outcome", "CONFIRMED").timer().count());
     }
 
     @Test

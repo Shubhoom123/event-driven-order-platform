@@ -17,6 +17,8 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.header.Header;
+import org.slf4j.MDC;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -53,12 +55,15 @@ class OutboxTest {
     @Autowired OutboxRelay relay;
     @Autowired JdbcClient jdbc;
 
+    private final Set<String> traceHeaders = new HashSet<>();
+
     // Broker frozen (docker pause) while orders arrive: intake must still succeed, nothing may be
     // published, and after the broker resumes every event must arrive. Duplicates are allowed
     // (at-least-once); losses are not.
     @Test
     void brokerOutageLosesNoEvents() throws Exception {
         Set<String> orderIds = new HashSet<>();
+        MDC.put("traceId", "trace-outage");
         kafka.getDockerClient().pauseContainerCmd(kafka.getContainerId()).exec();
         try {
             for (int i = 0; i < 20; i++) {
@@ -77,6 +82,8 @@ class OutboxTest {
         Set<String> receivedOrderIds = new HashSet<>();
         received.values().forEach(e -> receivedOrderIds.add(e.aggregateId()));
         assertEquals(orderIds, receivedOrderIds);
+        assertEquals(Set.of("trace-outage"), traceHeaders, "the relay must forward the trace id as a Kafka header");
+        MDC.clear();
     }
 
     @Test
@@ -122,6 +129,10 @@ class OutboxTest {
             long deadline = System.currentTimeMillis() + 30_000;
             while (byEventId.size() < expected && System.currentTimeMillis() < deadline) {
                 for (ConsumerRecord<String, String> r : consumer.poll(Duration.ofMillis(500))) {
+                    Header h = r.headers().lastHeader("traceId");
+                    if (h != null) {
+                        traceHeaders.add(new String(h.value()));
+                    }
                     EventEnvelope e = EventSerde.fromJson(r.value(), EventEnvelope.class);
                     byEventId.put(e.eventId(), e);
                 }

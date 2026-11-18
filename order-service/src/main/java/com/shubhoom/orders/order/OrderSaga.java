@@ -3,9 +3,13 @@ package com.shubhoom.orders.order;
 import com.shubhoom.orders.common.Inbox;
 import com.shubhoom.orders.common.OutboxWriter;
 import com.shubhoom.orders.common.Topics;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,11 +33,13 @@ public class OrderSaga {
     private final JdbcClient jdbc;
     private final Inbox inbox;
     private final OutboxWriter outbox;
+    private final MeterRegistry metrics;
 
-    public OrderSaga(JdbcClient jdbc, Inbox inbox, OutboxWriter outbox) {
+    public OrderSaga(JdbcClient jdbc, Inbox inbox, OutboxWriter outbox, MeterRegistry metrics) {
         this.jdbc = jdbc;
         this.inbox = inbox;
         this.outbox = outbox;
+        this.metrics = metrics;
     }
 
     // Each transition is a guarded UPDATE, so duplicate or late events change nothing.
@@ -91,10 +97,19 @@ public class OrderSaga {
     }
 
     private boolean move(UUID id, String from, String to) {
-        return jdbc.sql("UPDATE orders SET status = :to, attempts = 0, updated_at = now() "
-                        + "WHERE id = :id AND status = :from")
+        Optional<Double> ageSeconds = jdbc.sql("UPDATE orders SET status = :to, attempts = 0, updated_at = now() "
+                        + "WHERE id = :id AND status = :from RETURNING extract(epoch from (now() - created_at))")
                 .param("to", to).param("id", id).param("from", from)
-                .update() == 1;
+                .query(Double.class).optional();
+        if (ageSeconds.isEmpty()) {
+            return false;
+        }
+        metrics.counter("saga.transition", "to", to).increment();
+        if (to.equals("CONFIRMED") || to.equals("CANCELLED")) {
+            Timer.builder("saga.duration").tag("outcome", to).publishPercentileHistogram().register(metrics)
+                    .record(Duration.ofMillis((long) (ageSeconds.get() * 1000)));
+        }
+        return true;
     }
 
     private void command(UUID id, String status) {
